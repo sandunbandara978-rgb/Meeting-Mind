@@ -1,0 +1,178 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  ADMIN
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String
+  passwordHash String?
+  avatarUrl    String?
+  role         Role      @default(EMPLOYEE)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  workspaceMembers WorkspaceMember[]
+  meetings         Meeting[]
+  assignedTasks    Task[]            @relation("AssignedTasks")
+  notifications    Notification[]
+  comments         Comment[]
+}
+
+model Workspace {
+  id         String            @id @default(uuid())
+  name       String
+  owner_id   String
+  created_at DateTime          @default(now())
+
+  teams      Team[]
+  members    WorkspaceMember[]
+  meetings   Meeting[]
+}
+
+model Team {
+  id           String    @id @default(uuid())
+  workspace_id String
+  workspace    Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  name         String
+  created_at   DateTime  @default(now())
+
+  meetings     Meeting[]
+}
+
+model WorkspaceMember {
+  id           String    @id @default(uuid())
+  workspace_id String
+  workspace    Workspace @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  user_id      String
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role         Role      @default(EMPLOYEE)
+}
+
+model Meeting {
+  id              String              @id @default(uuid())
+  workspace_id    String
+  workspace       Workspace           @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  team_id         String?
+  team            Team?               @relation(fields: [team_id], references: [id], onDelete: SetNull)
+  title           String
+  description     String?
+  category        String              @default("General")
+  status          String              @default("COMPLETED") // RECORDING, PROCESSING, COMPLETED
+  durationSeconds Int                 @default(0)
+  date            DateTime            @default(now())
+  audio_url       String?
+  sentimentScore  Float               @default(0.88)
+  tags            String[]            @default([])
+
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transcripts     TranscriptSegment[]
+  decisions       Decision[]
+  summaries       Summary[]
+  topicSummaries  TopicSummary[]
+  tasks           Task[]
+  comments        Comment[]
+  created_at      DateTime            @default(now())
+  updated_at      DateTime            @updatedAt
+}
+
+model TranscriptSegment {
+  id          String   @id @default(uuid())
+  meeting_id  String
+  meeting     Meeting  @relation(fields: [meeting_id], references: [id], onDelete: Cascade)
+  speakerName String
+  timestamp   String
+  content     String   @db.Text
+  sentiment   String?  @default("NEUTRAL")
+  isBookmark  Boolean  @default(false)
+  bookmarkType String?
+  created_at  DateTime @default(now())
+}
+
+model Summary {
+  id           String   @id @default(uuid())
+  meeting_id   String
+  meeting      Meeting  @relation(fields: [meeting_id], references: [id], onDelete: Cascade)
+  summary_text String   @db.Text
+  created_at   DateTime @default(now())
+}
+
+model TopicSummary {
+  id          String   @id @default(uuid())
+  meeting_id  String
+  meeting     Meeting  @relation(fields: [meeting_id], references: [id], onDelete: Cascade)
+  topicName   String
+  description String   @db.Text
+  created_at  DateTime @default(now())
+}
+
+model Decision {
+  id          String   @id @default(uuid())
+  meeting_id  String
+  meeting     Meeting  @relation(fields: [meeting_id], references: [id], onDelete: Cascade)
+  text        String   @db.Text
+  impactLevel String   @default("HIGH")
+  created_at  DateTime @default(now())
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Task {
+  id               String       @id @default(uuid())
+  meeting_id       String?
+  meeting          Meeting?     @relation(fields: [meeting_id], references: [id], onDelete: SetNull)
+  assigned_user_id String?
+  assignedUser     User?        @relation("AssignedTasks", fields: [assigned_user_id], references: [id], onDelete: SetNull)
+  title            String
+  description      String?      @db.Text
+  status           TaskStatus   @default(TODO)
+  priority         TaskPriority @default(MEDIUM)
+  deadline         DateTime?
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  meeting_id String
+  meeting    Meeting  @relation(fields: [meeting_id], references: [id], onDelete: Cascade)
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  content    String   @db.Text
+  created_at DateTime @default(now())
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  title      String
+  message    String
+  isRead     Boolean  @default(false)
+  type       String   @default("TASK_ASSIGNED") // TASK_ASSIGNED, MEETING_REMINDER, SYSTEM
+  created_at DateTime @default(now())
+}
